@@ -229,36 +229,3 @@ lZx   						# save data in x and y indexed by stack size
 ### RUN THE NN ###
 
 lt x
-
-
-
-
-#############################################Trashed code####################
-
-
-# constant e for sigmoid function 
-# stored in register e
-2.718281828459045235360287471352 se 
-
-# This will not work...
-# sigmoid function f(x) = 1 / (1 + e^(-x)) where x is already on the stack
-# stored in register S
-[
-	_1 * 						# negate x
-	le r ^ 						# raise e to the power of -x
-	1 + 						# add 1
-	1 r / 						# divide one by the rest
-]sS 
-
-
-# Derivative of the sigmoid function f'(x) = f(x) * (1 - f(x))
-# stored in register s
-[
-	lS 							# load sigmoid function
-	x  							# apply f(x)
-	d  							# duplicate result
-	1  							# 1 on stack
-	r  							# swap top of stack
-	-  							# subract
-	*  							# multiply
-]ss
