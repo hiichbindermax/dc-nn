@@ -1,0 +1,264 @@
+# MIT License
+# 
+# Copyright (c) 2025 Maximilian Hell
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+
+
+
+
+##### Register Overview #####
+#	Q 	Quitting macro
+#	e 	Eulers Number e
+#	A 	Activation function
+#	a 	Derivate of activation function
+#	m 	sum of squared differences for MSE loss
+#	M 	intermediate result of MSE calculation
+#	l 	MSE calculation
+#	n 	Number data points
+#   p   learn rate
+#   E   number of epochs
+#   T   Training steps
+#   t   Main training loop
+#   Z   Data saving macro
+#   _   Intermediate macro for data saving
+#   X   Saving the current data chunk during training
+
+##### Array Overview ####
+#   x   array of data chunks
+#   y   array of data labels
+#   Y   array of y_pred during training
+
+# decimal precision to 20 places
+20k
+
+# quitting macro
+# stored in register Q
+[q]sQ
+
+
+# Learning rate and number of epochs
+0.1 sp
+1000 sE
+
+# using an algebraic function instead of the sigmoid as dc cannot handle non integer exponents
+# f(x) = x /(2 * sqrt(1 + x^2)) + 0.5
+[
+	d 							# duplicate x
+	2 ^							# raise to power
+	1 +							# add one
+	v 							# sqrt
+	2 * 
+	/ 							# division
+	0.5 + 
+]sA
+
+# derivative of the activation function
+# f'(x) = 1 /(2 * sqrt( (1 + x^2 )^3 ))
+[2 ^ 1 + 3 ^ v 2 * 1 r /]sa
+
+
+
+# MSE Loss. the top most element of the stack has to be y_true, then y_pred
+# 1/n * sum((y_true - y_pred) ^ 2) as the mean of the squared differences
+# Array y contains y_true and array Y contains y_pred
+# stored in register m and full mean function stored in l
+[
+	d d							# load the number of elements n and duplicate it
+	;y 							# retrive y_true
+	r ;Y						# retrive y_pred
+	-							# difference of y_true and y_pred
+	2 ^							# squared
+	LM+sM						# loading sum so far add it and store
+	1- 							# n minus 
+	d0!=m 						# if counter hasn't reached 0 continue loop
+]sm
+[
+	0sM							# initialise MSE to 0
+	ln 							# load n
+	lmx 						# calculate squared difference sum
+	lM 							# load squared difference sum
+	ln /						# divide by n to get mean
+	d sM
+]sl
+
+
+
+## Initial weights and biases
+# These were generated using np.random.normal() in python
+ 0.8761123145115244	1:w
+ 0.1113624055358604 2:w
+_2.4816227332892038 3:w
+ 0.1630997065297297 4:w
+ 0.8309874697929129 5:w
+_0.4641056543425773 6:w
+_0.1252385391632506 1:b
+ 0.3514078803331424 2:b
+ 0.0999569028091161 3:b
+
+
+
+## Feedforward function
+[
+	# first hidden layer
+	lX x		#load the current datapoint [x1 x2] and unpack(x)
+	2;w *		# second weight multiplication
+	r 1;w * 	# switch and first
+	+ 1;b +		# add load bias add
+	d 1:1 		# store the sum for backprop
+	lA x 		# activation function
+	d 2:1 		# save value
+
+	# second hidden layer
+	lX x 
+	4;w *
+	r 3;w *
+	+ 2;b +
+	d 1:2
+	lA x
+	d 2:2
+
+	# output neuron
+	6;w * 
+	r 5;w *
+	+ 3;b +
+	d 1:o
+	lA x
+	d 2:o
+]sf
+
+
+
+# Data in the form of [[x1 x2] y_true]
+#[[160 72] 1] 
+#[[133 65] 0] 
+#[[152 70] 1]
+#[[120 60] 0]
+
+[[_2	_1]	1]
+[[ 25	6]	0]
+[[ 17	4]	0]
+[[_15	_6]	1]
+
+
+# number of datapoints
+# stored in register n
+z sn
+
+[z sz x lz:y lz:x lZx]s_ 	# unfold data structure, save label in y and data in x 
+[z 0 <_]sZ 					# check if there is data on the stack
+lZx   						# save data in x and y indexed by stack size
+
+# training loop
+
+[
+	li;x sX			# iterate the data sets and load them to registers X and Y 
+	lfx 	# feed forward, then latent values should be in 1,2,o and ypred should be on the stack
+	d li:Y
+	## calculating the partial derivatives
+	li;y r - _2 * 	0:L 	# d_L_d_ypred
+	1;o la x 2;1 * 	1:L		# d_ypred_d_w5
+	1;o la x 2;2 * 	2:L 	# d_ypred_d_w6
+	1;o la x 		3:L 	# d_ypred_d_b3
+
+	1;o la x 5;w *  4:L 	# d_ypred_d_h1
+	1;o la x 6;w *  5:L 	# d_ypred_d_h2
+
+	lX x
+	1;1 la x * 		6:L 	# d_h1_d_w2
+    1;1 la x *      7:L 	# d_h1_d_w1
+    1;1 la x 		8:L 	# d_h1_d_b1
+
+    lX x
+    1;2 la x * 		9:L 	# d_h2_d_w4
+    1;2 la x * 	   10:L 	# d_h2_d_w3
+    1;2 la x 	   11:L 	# d_h2_d_b2
+
+
+    # Updating weights and biases 
+    # Neuron 1
+    1;w lp 0;L 4;L 7;L * * * - 1:w
+    2;w lp 0;L 4;L 6;L * * * - 2:w
+    1;b lp 0;L 4;L 8;L * * * - 1:b
+
+    # Neuron 2
+    3;w lp 0;L 5;L 10;L * * * - 3:w
+    4;w lp 0;L 5;L  9;L * * * - 4:w
+    2;b lp 0;L 5;L 11;L * * * - 2:b
+
+    # Neuron o
+    5;w lp 0;L 1;L * *  - 5:w
+    6;w lp 0;L 2;L * *  - 6:w
+    3;b lp 0;L 3;L * * - 3:b
+
+    li 1 - si # iterator i - 1
+    li 0 <T # if iterator not 0 then next data point
+]sT
+
+# Epochs:
+[
+	lE d 1- sE
+	0 =Q
+	ln si # start with last data point
+	lTx # run training loop
+	llx
+	[loss: ]nnAPDP
+	c
+	ltx
+]st
+
+
+### RUN THE NN ###
+
+lt x
+
+
+
+
+#############################################Trashed code####################
+
+
+# constant e for sigmoid function 
+# stored in register e
+2.718281828459045235360287471352 se 
+
+# This will not work...
+# sigmoid function f(x) = 1 / (1 + e^(-x)) where x is already on the stack
+# stored in register S
+[
+	_1 * 						# negate x
+	le r ^ 						# raise e to the power of -x
+	1 + 						# add 1
+	1 r / 						# divide one by the rest
+]sS 
+
+
+# Derivative of the sigmoid function f'(x) = f(x) * (1 - f(x))
+# stored in register s
+[
+	lS 							# load sigmoid function
+	x  							# apply f(x)
+	d  							# duplicate result
+	1  							# 1 on stack
+	r  							# swap top of stack
+	-  							# subract
+	*  							# multiply
+]ss
